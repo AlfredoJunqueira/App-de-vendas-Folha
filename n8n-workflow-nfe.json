@@ -1,0 +1,190 @@
+{
+  "name": "Extração NF-e — App Representante",
+  "meta": { "instanceId": "app-representante" },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nfe-extract",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "aabb0001-0001-0001-0001-aabb00000001",
+      "name": "Receber Documento",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detecta tipo do arquivo (XML ou PDF) e normaliza a chave binária para 'arquivo'\nconst item = $input.first();\nconst binaryKeys = Object.keys(item.binary || {});\n\nif (binaryKeys.length === 0) {\n  return [{ json: { tipo: 'erro', mensagem: 'Nenhum arquivo recebido' } }];\n}\n\nconst fileKey = binaryKeys[0];\nconst file = item.binary[fileKey];\nconst mimeType = (file.mimeType || '').toLowerCase();\nconst fileName = (file.fileName || fileKey).toLowerCase();\n\nlet tipo = 'erro';\nif (mimeType.includes('xml') || fileName.endsWith('.xml')) {\n  tipo = 'xml';\n} else if (mimeType.includes('pdf') || fileName.endsWith('.pdf')) {\n  tipo = 'pdf';\n}\n\nreturn [{\n  json: { tipo, fileName: file.fileName || fileKey, mimeType },\n  binary: { arquivo: file }\n}];"
+      },
+      "id": "aabb0002-0002-0002-0002-aabb00000002",
+      "name": "Detectar Tipo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "xml",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "XML"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "pdf",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PDF"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aabb0003-0003-0003-0003-aabb00000003",
+      "name": "Rota por Tipo",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai dados do DESTINATÁRIO do XML da NF-e brasileira\nconst item = $input.first();\nconst binaryData = item.binary.arquivo;\nconst xmlContent = Buffer.from(binaryData.data, 'base64').toString('utf-8');\n\nfunction extractTag(xml, tag) {\n  const match = xml.match(new RegExp('<' + tag + '[^>]*>([\\\\s\\\\S]*?)<\\\\/' + tag + '>'));\n  return match ? match[1].replace(/<[^>]+>/g, '').trim() : '';\n}\n\n// Seção do destinatário\nconst destMatch = xmlContent.match(/<dest>([\\s\\S]*?)<\\/dest>/);\nconst dest = destMatch ? destMatch[1] : '';\n\nif (!dest) {\n  return [{ json: { sucesso: false, mensagem: 'Seção <dest> não encontrada no XML. Verifique se o arquivo é uma NF-e válida.' } }];\n}\n\nconst nome     = extractTag(dest, 'xNome');\nconst cnpj     = extractTag(dest, 'CNPJ');\nconst cpf      = extractTag(dest, 'CPF');\nconst cidade   = extractTag(dest, 'xMun');\nconst estado   = extractTag(dest, 'UF');\nlet telefone   = extractTag(dest, 'fone');\n\n// Formata telefone\nif (telefone) {\n  const d = telefone.replace(/\\D/g, '');\n  if (d.length === 11)      telefone = '(' + d.slice(0,2) + ') ' + d.slice(2,7) + '-' + d.slice(7);\n  else if (d.length === 10) telefone = '(' + d.slice(0,2) + ') ' + d.slice(2,6) + '-' + d.slice(6);\n}\n\nreturn [{\n  json: {\n    sucesso: true,\n    nome,\n    contato: nome,\n    telefone,\n    cidade,\n    estado,\n    documento: cnpj || cpf,\n    tipo_documento: cnpj ? 'CNPJ' : 'CPF',\n    fonte: 'xml'\n  }\n}];"
+      },
+      "id": "aabb0004-0004-0004-0004-aabb00000004",
+      "name": "Parse XML NF-e",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 160]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "arquivo"
+      },
+      "id": "aabb0005-0005-0005-0005-aabb00000005",
+      "name": "Extrair Texto PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [880, 460]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer COLE_SUA_CHAVE_OPENAI_AQUI"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Você extrai dados do DESTINATÁRIO de documentos fiscais brasileiros (NF-e / DANFE). Retorne SOMENTE um JSON válido, sem markdown, sem explicações. Campos obrigatórios: nome (razão social ou nome completo), contato (mesmo valor que nome), telefone (formato (XX) XXXXX-XXXX ou vazio), cidade, estado (sigla UF com 2 letras maiúsculas), documento (CNPJ ou CPF somente dígitos), tipo_documento ('CNPJ' ou 'CPF'), sucesso (true). Campos não encontrados devem ser string vazia.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Extraia os dados do DESTINATÁRIO deste documento fiscal:\\n\\n{{ $json.text.slice(0, 8000) }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "aabb0006-0006-0006-0006-aabb00000006",
+      "name": "OpenAI Extrair Dados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Interpreta o JSON retornado pelo GPT\nconst item = $input.first();\nconst content = item.json.choices?.[0]?.message?.content || '{}';\n\ntry {\n  const cleaned = content\n    .replace(/```json\\n?/gi, '')\n    .replace(/```\\n?/g, '')\n    .trim();\n  const data = JSON.parse(cleaned);\n  return [{ json: { ...data, fonte: 'pdf', sucesso: true } }];\n} catch (e) {\n  return [{\n    json: {\n      sucesso: false,\n      mensagem: 'Não foi possível interpretar a resposta da IA. Tente novamente ou use o XML da NF-e.',\n      fonte: 'pdf'\n    }\n  }];\n}"
+      },
+      "id": "aabb0007-0007-0007-0007-aabb00000007",
+      "name": "Parse Resposta OpenAI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 460]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      },
+      "id": "aabb0008-0008-0008-0008-aabb00000008",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1540, 300]
+    }
+  ],
+  "connections": {
+    "Receber Documento": {
+      "main": [
+        [{ "node": "Detectar Tipo", "type": "main", "index": 0 }]
+      ]
+    },
+    "Detectar Tipo": {
+      "main": [
+        [{ "node": "Rota por Tipo", "type": "main", "index": 0 }]
+      ]
+    },
+    "Rota por Tipo": {
+      "main": [
+        [{ "node": "Parse XML NF-e",   "type": "main", "index": 0 }],
+        [{ "node": "Extrair Texto PDF", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse XML NF-e": {
+      "main": [
+        [{ "node": "Responder", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extrair Texto PDF": {
+      "main": [
+        [{ "node": "OpenAI Extrair Dados", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI Extrair Dados": {
+      "main": [
+        [{ "node": "Parse Resposta OpenAI", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Resposta OpenAI": {
+      "main": [
+        [{ "node": "Responder", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "tags": []
+}
