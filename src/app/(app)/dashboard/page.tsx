@@ -3,6 +3,7 @@ import { formatBRL, formatTon, formatDate } from '@/lib/utils/format'
 import Link from 'next/link'
 import BannerPlanejamento from '@/components/planejamento/BannerPlanejamento'
 import GraficoVolumesProdutos from '@/components/dashboard/GraficoVolumesProdutos'
+import GraficoClientesPedidos from '@/components/dashboard/GraficoClientesPedidos'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -62,7 +63,7 @@ export default async function DashboardPage() {
   const [{ data: pedidosHistorico }, { data: produtosDb }] = await Promise.all([
     supabase
       .from('pedidos')
-      .select('quantidade_kg, quantidade_unidades, itens, produto, data_fechamento')
+      .select('quantidade_kg, quantidade_unidades, itens, produto, data_fechamento, cliente_id')
       .eq('owner_id', user!.id)
       .gte('data_fechamento', inicio12Meses)
       .neq('status', 'cancelado'),
@@ -119,14 +120,34 @@ export default async function DashboardPage() {
     }
   }
 
+  // Clientes atendidos e pedidos por mês
+  const pedidosPorMes: Record<string, number> = {}
+  const clientesPorMes: Record<string, Set<string>> = {}
+  for (const pedido of pedidosHistorico ?? []) {
+    const mes = pedido.data_fechamento?.slice(0, 7)
+    if (!mes) continue
+    pedidosPorMes[mes] = (pedidosPorMes[mes] ?? 0) + 1
+    if (pedido.cliente_id) {
+      if (!clientesPorMes[mes]) clientesPorMes[mes] = new Set()
+      clientesPorMes[mes].add(pedido.cliente_id)
+    }
+  }
+
   const dadosFardo: Record<string, string | number>[] = []
   const dadosBola:  Record<string, string | number>[] = []
+  const dadosClientesPedidos: { mes: string; pedidos: number; clientes: number }[] = []
+
   for (let i = 11; i >= 0; i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
     const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     const mesLabel = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(d)
     dadosFardo.push({ mes: mesLabel, _un: unFardo[mesKey] ?? 0, ...(kgFardo[mesKey] ?? {}) })
     dadosBola.push ({  mes: mesLabel, _un: unBola[mesKey]  ?? 0, ...(kgBola[mesKey]  ?? {}) })
+    dadosClientesPedidos.push({
+      mes: mesLabel,
+      pedidos: pedidosPorMes[mesKey] ?? 0,
+      clientes: clientesPorMes[mesKey]?.size ?? 0,
+    })
   }
 
   // Verifica se já existe planejamento salvo para o mês atual
@@ -186,6 +207,9 @@ export default async function DashboardPage() {
           <p className="text-2xl font-bold text-gray-900 mt-1">{clientesAtendidos}</p>
         </div>
       </div>
+
+      {/* Gráfico clientes atendidos e pedidos */}
+      <GraficoClientesPedidos dados={dadosClientesPedidos} />
 
       {/* Gráficos volume por tipo de produto */}
       <div className="grid md:grid-cols-2 gap-6">
