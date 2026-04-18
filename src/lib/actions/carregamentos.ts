@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { getValidAccessToken, upsertCalendarEvent, deleteCalendarEvent } from '@/lib/google/calendar'
 
 type ParadaItem = { produto: string; quantidade_kg: number; quantidade_unidades?: number | null }
 type Parada = {
@@ -14,6 +15,46 @@ type Parada = {
   pedido_id?: string | null
   ordem: number
   observacoes?: string
+}
+
+async function syncCalendar(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  carregamentoId: string,
+  data: string,
+  googleEventId: string | null | undefined
+): Promise<void> {
+  try {
+    const gc = await getValidAccessToken(supabase, userId)
+    if (!gc) return
+
+    const { data: paradas } = await supabase
+      .from('paradas')
+      .select('quantidade_kg, itens, clientes(nome_propriedade)')
+      .eq('carregamento_id', carregamentoId)
+
+    const totalKg = (paradas ?? []).reduce((s: number, p: { quantidade_kg: number | null; itens: Array<{ quantidade_kg: number }> | null }) => {
+      if (Array.isArray(p.itens) && p.itens.length > 0) return s + p.itens.reduce((si, it) => si + (it.quantidade_kg || 0), 0)
+      return s + (p.quantidade_kg || 0)
+    }, 0)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const clientes = (paradas ?? []).map((p: any) => p.clientes?.nome_propriedade).filter(Boolean).join(', ')
+    const title = `Carregamento${clientes ? ` — ${clientes}` : ''}`
+    const description = `Total: ${totalKg.toLocaleString('pt-BR')} kg`
+
+    const newEventId = await upsertCalendarEvent(gc.accessToken, gc.calendarId, {
+      title,
+      date: data,
+      description,
+      googleEventId: googleEventId ?? null,
+    })
+
+    if (newEventId && newEventId !== googleEventId) {
+      await supabase.from('carregamentos').update({ google_event_id: newEventId }).eq('id', carregamentoId)
+    }
+  } catch {}
 }
 
 function validarData(data: string): string {
@@ -67,6 +108,8 @@ export async function criarCarregamento(formData: FormData) {
       if (paradasError) throw new Error(paradasError.message)
     }
   }
+
+  await syncCalendar(supabase, user.id, carregamento.id, baseInsert.data, null)
 
   revalidatePath('/carregamentos')
   revalidatePath('/dashboard')
@@ -216,6 +259,15 @@ export async function excluirCarregamento(id: string, formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Remove evento do Google Calendar antes de excluir
+  try {
+    const { data: c } = await supabase.from('carregamentos').select('google_event_id').eq('id', id).single()
+    if (c?.google_event_id) {
+      const gc = await getValidAccessToken(supabase, user.id)
+      if (gc) await deleteCalendarEvent(gc.accessToken, gc.calendarId, c.google_event_id)
+    }
+  } catch {}
+
   const { error } = await supabase
     .from('carregamentos')
     .delete()
@@ -347,6 +399,9 @@ export async function atualizarCarregamento(id: string, formData: FormData) {
       }
     }
   }
+
+  const { data: cAtual } = await supabase.from('carregamentos').select('google_event_id, data').eq('id', id).single()
+  await syncCalendar(supabase, user.id, id, cAtual?.data ?? baseUpdate.data, cAtual?.google_event_id)
 
   revalidatePath(`/carregamentos/${id}`)
   revalidatePath('/carregamentos')
