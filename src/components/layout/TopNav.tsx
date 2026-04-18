@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-const navItems = [
+const allNavItems = [
   { href: '/dashboard',      label: 'Dashboard' },
   { href: '/clientes',       label: 'Clientes' },
   { href: '/interacoes',     label: 'Agenda' },
@@ -17,16 +17,23 @@ const navItems = [
   { href: '/produtos',       label: 'Produtos' },
 ]
 
+const colaboradorNavItems = [
+  { href: '/carregamentos', label: 'Carregamentos' },
+]
+
 interface Props {
   logoUrl?: string | null
   nomeApp?: string | null
   subtituloApp?: string | null
+  role?: 'admin' | 'colaborador'
 }
 
-export default function TopNav({ logoUrl, nomeApp, subtituloApp }: Props) {
+export default function TopNav({ logoUrl, nomeApp, subtituloApp, role = 'admin' }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const isColaborador = role === 'colaborador'
+  const navItems = isColaborador ? colaboradorNavItems : allNavItems
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -50,16 +57,14 @@ export default function TopNav({ logoUrl, nomeApp, subtituloApp }: Props) {
         <div className="flex items-center h-14 gap-6">
 
           {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0 group">
+          <Link href="/carregamentos" className="flex items-center gap-2.5 shrink-0 group">
             {logoUrl ? (
-              /* Custom logo */
               <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
                 style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <Image src={logoUrl} alt={appName} width={32} height={32}
                   className="w-full h-full object-contain" unoptimized />
               </div>
             ) : (
-              /* Default leaf mark */
               <div
                 className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
                 style={{ background: 'rgba(210,216,43,0.15)', border: '1px solid rgba(210,216,43,0.25)' }}
@@ -123,21 +128,23 @@ export default function TopNav({ logoUrl, nomeApp, subtituloApp }: Props) {
             })}
           </nav>
 
-          {/* Right: Config gear + Sair */}
+          {/* Right: Config gear (admin only) + Sair */}
           <div className="ml-auto shrink-0 flex items-center gap-2">
-            <Link
-              href="/configuracoes"
-              title="Configurações"
-              className="p-1.5 rounded-md transition-all"
-              style={{ color: pathname.startsWith('/configuracoes') ? '#D2D82B' : '#6a9a95' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ffffff' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = pathname.startsWith('/configuracoes') ? '#D2D82B' : '#6a9a95' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="10" cy="10" r="2.5"/>
-                <path d="M10 2v1.5M10 16.5V18M2 10h1.5M16.5 10H18M4.22 4.22l1.06 1.06M14.72 14.72l1.06 1.06M4.22 15.78l1.06-1.06M14.72 5.28l1.06-1.06"/>
-              </svg>
-            </Link>
+            {!isColaborador && (
+              <Link
+                href="/configuracoes"
+                title="Configurações"
+                className="p-1.5 rounded-md transition-all"
+                style={{ color: pathname.startsWith('/configuracoes') ? '#D2D82B' : '#6a9a95' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ffffff' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = pathname.startsWith('/configuracoes') ? '#D2D82B' : '#6a9a95' }}
+              >
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="10" cy="10" r="2.5"/>
+                  <path d="M10 2v1.5M10 16.5V18M2 10h1.5M16.5 10H18M4.22 4.22l1.06 1.06M14.72 14.72l1.06 1.06M4.22 15.78l1.06-1.06M14.72 5.28l1.06-1.06"/>
+                </svg>
+              </Link>
+            )}
 
             <button
               onClick={handleLogout}

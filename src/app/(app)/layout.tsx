@@ -15,18 +15,23 @@ export default async function AppLayout({
     redirect('/login')
   }
 
-  // Busca identidade visual — ignora se perfis ainda não existir
   let config: { logo_url?: string | null; nome_app?: string | null; subtitulo_app?: string | null } | null = null
+  let role: 'admin' | 'colaborador' = 'admin'
+
   try {
     const { data } = await supabase
       .from('perfis')
-      .select('logo_url, nome_app, subtitulo_app')
+      .select('logo_url, nome_app, subtitulo_app, role')
       .eq('user_id', user.id)
       .maybeSingle()
     config = data
+    if (data?.role === 'colaborador') role = 'colaborador'
   } catch {
     // tabela não existe ainda
   }
+
+  // Colaboradores só podem acessar /carregamentos
+  // (outras páginas retornarão erro de autorização naturalmente)
 
   return (
     <div className="min-h-screen print:bg-white" style={{ background: 'var(--brand-mist)' }}>
@@ -35,6 +40,7 @@ export default async function AppLayout({
           logoUrl={config?.logo_url}
           nomeApp={config?.nome_app}
           subtituloApp={config?.subtitulo_app}
+          role={role}
         />
       </div>
       <div className="pt-14 print:pt-0">
@@ -43,7 +49,7 @@ export default async function AppLayout({
         </main>
       </div>
       <div className="print:hidden">
-        <MobileNav />
+        <MobileNav role={role} />
       </div>
     </div>
   )

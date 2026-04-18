@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import ConfiguracaoForm from '@/components/configuracoes/ConfiguracaoForm'
 import SincronizarCalendarButton from '@/components/configuracoes/SincronizarCalendarButton'
+import ColaboradoresSection from '@/components/configuracoes/ColaboradoresSection'
 import Link from 'next/link'
 
 export default async function ConfiguracoesPage({ searchParams }: { searchParams: Promise<{ google?: string }> }) {
@@ -19,6 +21,25 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
   } catch {
     // tabela ainda não existe
   }
+
+  // Busca colaboradores vinculados a este usuário
+  let colaboradores: { user_id: string; email: string }[] = []
+  try {
+    const admin = createAdminClient()
+    const { data: perfisColab } = await admin
+      .from('perfis')
+      .select('user_id')
+      .eq('employer_id', user!.id)
+      .eq('role', 'colaborador')
+
+    if (perfisColab && perfisColab.length > 0) {
+      const ids = perfisColab.map((p: { user_id: string }) => p.user_id)
+      const { data: { users } } = await admin.auth.admin.listUsers()
+      colaboradores = (users ?? [])
+        .filter(u => ids.includes(u.id))
+        .map(u => ({ user_id: u.id, email: u.email ?? '' }))
+    }
+  } catch {}
 
   let googleConectado = false
   try {
@@ -77,6 +98,8 @@ export default async function ConfiguracoesPage({ searchParams }: { searchParams
         público chamado <code className="font-mono text-xs bg-black/5 px-1 py-0.5 rounded">logos</code> no
         Supabase Storage com acesso de leitura público.
       </div>
+
+      <ColaboradoresSection colaboradores={colaboradores} />
 
       <ConfiguracaoForm perfil={perfil} />
     </div>

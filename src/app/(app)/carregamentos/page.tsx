@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import CalendarioGrid from '@/components/carregamentos/CalendarioGrid'
 import GraficoLocais from '@/components/carregamentos/GraficoLocais'
@@ -38,6 +39,25 @@ export default async function CarregamentosPage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Detecta colaborador e determina owner efetivo
+  let isColaborador = false
+  let effectiveOwnerId = user!.id
+  try {
+    const { data: perfil } = await supabase
+      .from('perfis')
+      .select('role, employer_id')
+      .eq('user_id', user!.id)
+      .maybeSingle()
+    if (perfil?.role === 'colaborador' && perfil.employer_id) {
+      isColaborador = true
+      effectiveOwnerId = perfil.employer_id
+    }
+  } catch {}
+
+  // Para colaboradores usa admin client (bypassa RLS do employer)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db: any = isColaborador ? createAdminClient() : supabase
+
   const hoje = new Date()
   const mesAtualRaw = params.mes || `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
   const [anoRaw, mesRaw] = mesAtualRaw.split('-').map(Number)
@@ -50,30 +70,30 @@ export default async function CarregamentosPage({
   const fimMes = new Date(ano, mes, 0).toISOString().split('T')[0]
 
   const [{ data: carregamentos }, { data: pedidos }, { data: produtos }, locaisResult] = await Promise.all([
-    supabase
+    db
       .from('carregamentos')
       .select('id, data, status, transportador_nome, locais_carregamento(nome), paradas(quantidade_kg, quantidade_unidades, produto, clientes(nome_propriedade))')
-      .eq('owner_id', user!.id)
+      .eq('owner_id', effectiveOwnerId)
       .gte('data', inicioMes)
       .lte('data', fimMes)
       .order('data'),
-    supabase
+    db
       .from('pedidos')
       .select('id, data_entrega_prevista, status, quantidade_kg, produto, clientes(nome_propriedade), locais_carregamento(nome)')
-      .eq('owner_id', user!.id)
+      .eq('owner_id', effectiveOwnerId)
       .neq('status', 'cancelado')
       .is('carregamento_id', null)
       .gte('data_entrega_prevista', inicioMes)
       .lte('data_entrega_prevista', fimMes),
-    supabase
+    db
       .from('produtos')
       .select('value, curto, peso_unitario_kg, unidade_embalagem')
-      .eq('owner_id', user!.id)
+      .eq('owner_id', effectiveOwnerId)
       .eq('ativo', true),
-    supabase
+    db
       .from('locais_carregamento')
       .select('nome, cor_fonte')
-      .eq('owner_id', user!.id),
+      .eq('owner_id', effectiveOwnerId),
   ])
 
   // Mapa nome-do-local → cor_fonte (graceful: se a coluna não existir, fica vazio)
@@ -84,11 +104,13 @@ export default async function CarregamentosPage({
     }
   }
 
+  type ProdutoRow = { value: string; curto: string; peso_unitario_kg: number; unidade_embalagem: string }
+  const produtosTyped = (produtos ?? []) as ProdutoRow[]
   const produtoCurto: Record<string, string> = Object.fromEntries(
-    (produtos ?? []).map(p => [p.value, p.curto])
+    produtosTyped.map(p => [p.value, p.curto])
   )
   const produtoEmbalagem: Record<string, { peso: number; unidade: string }> = Object.fromEntries(
-    (produtos ?? [])
+    produtosTyped
       .filter(p => p.peso_unitario_kg && p.unidade_embalagem)
       .map(p => [p.value, { peso: p.peso_unitario_kg, unidade: p.unidade_embalagem }])
   )
@@ -217,12 +239,14 @@ export default async function CarregamentosPage({
           >
             Imprimir PDF
           </Link>
-          <Link
-            href="/carregamentos/novo"
-            className="bg-[#193337] hover:bg-[#015046] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            + Novo carregamento
-          </Link>
+          {!isColaborador && (
+            <Link
+              href="/carregamentos/novo"
+              className="bg-[#193337] hover:bg-[#015046] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              + Novo carregamento
+            </Link>
+          )}
         </div>
       </div>
 

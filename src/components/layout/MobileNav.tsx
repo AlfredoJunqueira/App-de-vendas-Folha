@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-const navItems = [
+const allNavItems = [
   {
     href: '/dashboard', label: 'Início',
     icon: (
@@ -102,8 +102,15 @@ const navItems = [
   },
 ]
 
-export default function MobileNav() {
+const colaboradorNavItems = allNavItems.filter(i => i.href === '/carregamentos')
+
+interface Props {
+  role?: 'admin' | 'colaborador'
+}
+
+export default function MobileNav({ role = 'admin' }: Props) {
   const pathname = usePathname()
+  const navItems = role === 'colaborador' ? colaboradorNavItems : allNavItems
 
   return (
     <nav
