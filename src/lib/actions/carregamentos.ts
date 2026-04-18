@@ -282,6 +282,33 @@ export async function excluirCarregamento(id: string, formData: FormData) {
   redirect(mes ? `/carregamentos?mes=${mes}` : '/carregamentos')
 }
 
+export async function sincronizarTodosCarregamentos(): Promise<{ ok: number; erros: number }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: 0, erros: 0 }
+
+  const gc = await getValidAccessToken(supabase, user.id)
+  if (!gc) return { ok: 0, erros: 0 }
+
+  const { data: carregamentos } = await supabase
+    .from('carregamentos')
+    .select('id, data, google_event_id')
+    .eq('owner_id', user.id)
+    .is('google_event_id', null)
+
+  let ok = 0, erros = 0
+  for (const c of carregamentos ?? []) {
+    try {
+      await syncCalendar(supabase, user.id, c.id, c.data, c.google_event_id)
+      ok++
+    } catch {
+      erros++
+    }
+  }
+
+  return { ok, erros }
+}
+
 export async function atualizarCarregamento(id: string, formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
