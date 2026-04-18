@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatBRL, formatTon, formatDate } from '@/lib/utils/format'
 import Link from 'next/link'
 import BannerPlanejamento from '@/components/planejamento/BannerPlanejamento'
+import GraficoVolumesProdutos from '@/components/dashboard/GraficoVolumesProdutos'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -16,6 +17,7 @@ export default async function DashboardPage() {
   const proximos7 = new Date(hoje.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   const hoje_str = hoje.toISOString().split('T')[0]
   const limite30dias = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const inicio12Meses = new Date(hoje.getFullYear(), hoje.getMonth() - 11, 1).toISOString().split('T')[0]
 
   // Pedidos do mês (entregues ou confirmados)
   const { data: pedidosMes } = await supabase
@@ -55,6 +57,51 @@ export default async function DashboardPage() {
 
   const clientesComContatoRecente = new Set(interacoesRecentes?.map(i => i.cliente_id))
   const clientesSemContato = todosClientes?.filter(c => !clientesComContatoRecente.has(c.id)) ?? []
+
+  // Histórico 12 meses — volume por produto
+  const { data: pedidosHistorico } = await supabase
+    .from('pedidos')
+    .select('quantidade_kg, itens, produto, data_fechamento')
+    .eq('owner_id', user!.id)
+    .gte('data_fechamento', inicio12Meses)
+    .neq('status', 'cancelado')
+
+  const { data: produtosDb } = await supabase
+    .from('produtos')
+    .select('value, label')
+    .eq('owner_id', user!.id)
+  const produtoLabel: Record<string, string> = Object.fromEntries((produtosDb ?? []).map(p => [p.value, p.label]))
+
+  // Agrupa por mês e produto (em toneladas)
+  const mesesMap: Record<string, Record<string, number>> = {}
+  for (const pedido of pedidosHistorico ?? []) {
+    const mes = pedido.data_fechamento?.slice(0, 7)
+    if (!mes) continue
+    if (!mesesMap[mes]) mesesMap[mes] = {}
+    const itens: { produto: string; quantidade_kg: number }[] =
+      Array.isArray(pedido.itens) && pedido.itens.length > 0
+        ? pedido.itens
+        : [{ produto: pedido.produto, quantidade_kg: pedido.quantidade_kg }]
+    for (const item of itens) {
+      const prod = item.produto || 'outros'
+      mesesMap[mes][prod] = (mesesMap[mes][prod] ?? 0) + (item.quantidade_kg ?? 0) / 1000
+    }
+  }
+
+  const dadosGrafico: Record<string, string | number>[] = []
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+    const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const mesLabel = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(d)
+    dadosGrafico.push({ mes: mesLabel, ...(mesesMap[mesKey] ?? {}) })
+  }
+
+  const todosProdutos = [...new Set(
+    (pedidosHistorico ?? []).flatMap(p => {
+      if (Array.isArray(p.itens) && p.itens.length > 0) return (p.itens as { produto: string }[]).map(i => i.produto)
+      return [p.produto]
+    }).filter(Boolean)
+  )] as string[]
 
   // Verifica se já existe planejamento salvo para o mês atual
   const { data: planejamentoDoMes } = await supabase
@@ -113,6 +160,13 @@ export default async function DashboardPage() {
           <p className="text-2xl font-bold text-gray-900 mt-1">{clientesAtendidos}</p>
         </div>
       </div>
+
+      {/* Gráfico volume por produto */}
+      <GraficoVolumesProdutos
+        dados={dadosGrafico}
+        produtos={todosProdutos}
+        produtoLabel={produtoLabel}
+      />
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Carregamentos próximos 7 dias */}
