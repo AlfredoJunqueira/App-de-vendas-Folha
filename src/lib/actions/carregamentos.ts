@@ -29,6 +29,12 @@ async function syncCalendar(
     const gc = await getValidAccessToken(supabase, userId)
     if (!gc) return
 
+    const { data: carregamento } = await supabase
+      .from('carregamentos')
+      .select('local_carregamento_id, locais_carregamento(nome)')
+      .eq('id', carregamentoId)
+      .single()
+
     const { data: paradas } = await supabase
       .from('paradas')
       .select('quantidade_kg, itens, clientes(nome_propriedade)')
@@ -41,8 +47,25 @@ async function syncCalendar(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const clientes = (paradas ?? []).map((p: any) => p.clientes?.nome_propriedade).filter(Boolean).join(', ')
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const produtos = (paradas ?? []).flatMap((p: any) => {
+      if (Array.isArray(p.itens) && p.itens.length > 0) return p.itens.map((it: { produto: string }) => it.produto)
+      return []
+    }).filter(Boolean)
+    const produtosUnicos = [...new Set(produtos as string[])]
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const localNome = (carregamento as any)?.locais_carregamento?.nome as string | undefined
+
     const title = `Carregamento${clientes ? ` — ${clientes}` : ''}`
-    const description = `Total: ${totalKg.toLocaleString('pt-BR')} kg`
+
+    const linhas = [
+      `Total: ${totalKg.toLocaleString('pt-BR')} kg`,
+      localNome ? `Local: ${localNome}` : null,
+      produtosUnicos.length > 0 ? `Produtos: ${produtosUnicos.join(', ')}` : null,
+    ].filter(Boolean)
+    const description = linhas.join('\n')
 
     const newEventId = await upsertCalendarEvent(gc.accessToken, gc.calendarId, {
       title,
@@ -294,7 +317,6 @@ export async function sincronizarTodosCarregamentos(): Promise<{ ok: number; err
     .from('carregamentos')
     .select('id, data, google_event_id')
     .eq('owner_id', user.id)
-    .is('google_event_id', null)
 
   let ok = 0, erros = 0
   for (const c of carregamentos ?? []) {
