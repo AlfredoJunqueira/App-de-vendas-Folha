@@ -58,50 +58,76 @@ export default async function DashboardPage() {
   const clientesComContatoRecente = new Set(interacoesRecentes?.map(i => i.cliente_id))
   const clientesSemContato = todosClientes?.filter(c => !clientesComContatoRecente.has(c.id)) ?? []
 
-  // Histórico 12 meses — volume por produto
-  const { data: pedidosHistorico } = await supabase
-    .from('pedidos')
-    .select('quantidade_kg, itens, produto, data_fechamento')
-    .eq('owner_id', user!.id)
-    .gte('data_fechamento', inicio12Meses)
-    .neq('status', 'cancelado')
+  // Histórico 12 meses — volume por produto separado por tipo de embalagem
+  const [{ data: pedidosHistorico }, { data: produtosDb }] = await Promise.all([
+    supabase
+      .from('pedidos')
+      .select('quantidade_kg, quantidade_unidades, itens, produto, data_fechamento')
+      .eq('owner_id', user!.id)
+      .gte('data_fechamento', inicio12Meses)
+      .neq('status', 'cancelado'),
+    supabase
+      .from('produtos')
+      .select('value, label, unidade_embalagem, peso_unitario_kg')
+      .eq('owner_id', user!.id),
+  ])
 
-  const { data: produtosDb } = await supabase
-    .from('produtos')
-    .select('value, label')
-    .eq('owner_id', user!.id)
-  const produtoLabel: Record<string, string> = Object.fromEntries((produtosDb ?? []).map(p => [p.value, p.label]))
+  const produtoLabel: Record<string, string> = {}
+  const produtoPeso: Record<string, number> = {}
+  const produtoUnidade: Record<string, string> = {}
+  for (const p of produtosDb ?? []) {
+    produtoLabel[p.value] = p.label
+    if (p.peso_unitario_kg) produtoPeso[p.value] = p.peso_unitario_kg
+    if (p.unidade_embalagem) produtoUnidade[p.value] = p.unidade_embalagem
+  }
 
-  // Agrupa por mês e produto (em toneladas)
-  const mesesMap: Record<string, Record<string, number>> = {}
+  const prodIdsFardo = (produtosDb ?? []).filter(p => p.unidade_embalagem === 'fardo').map(p => p.value)
+  const prodIdsBola  = (produtosDb ?? []).filter(p => p.unidade_embalagem === 'bola').map(p => p.value)
+
+  // Mapas por mês: kg por produto + total de unidades
+  const kgFardo:  Record<string, Record<string, number>> = {}
+  const kgBola:   Record<string, Record<string, number>> = {}
+  const unFardo:  Record<string, number> = {}
+  const unBola:   Record<string, number> = {}
+
+  type ItemHistorico = { produto: string; quantidade_kg: number; quantidade_unidades?: number | null }
+
   for (const pedido of pedidosHistorico ?? []) {
     const mes = pedido.data_fechamento?.slice(0, 7)
     if (!mes) continue
-    if (!mesesMap[mes]) mesesMap[mes] = {}
-    const itens: { produto: string; quantidade_kg: number }[] =
+
+    const itens: ItemHistorico[] =
       Array.isArray(pedido.itens) && pedido.itens.length > 0
         ? pedido.itens
-        : [{ produto: pedido.produto, quantidade_kg: pedido.quantidade_kg }]
+        : [{ produto: pedido.produto, quantidade_kg: pedido.quantidade_kg, quantidade_unidades: pedido.quantidade_unidades }]
+
     for (const item of itens) {
       const prod = item.produto || 'outros'
-      mesesMap[mes][prod] = (mesesMap[mes][prod] ?? 0) + (item.quantidade_kg ?? 0) / 1000
+      const kg = (item.quantidade_kg ?? 0) / 1000
+      const un = item.quantidade_unidades
+        ?? (produtoPeso[prod] ? Math.round((item.quantidade_kg ?? 0) / produtoPeso[prod]) : 0)
+
+      if (prodIdsFardo.includes(prod)) {
+        if (!kgFardo[mes]) kgFardo[mes] = {}
+        kgFardo[mes][prod] = (kgFardo[mes][prod] ?? 0) + kg
+        unFardo[mes] = (unFardo[mes] ?? 0) + un
+      } else if (prodIdsBola.includes(prod)) {
+        if (!kgBola[mes]) kgBola[mes] = {}
+        kgBola[mes][prod] = (kgBola[mes][prod] ?? 0) + kg
+        unBola[mes] = (unBola[mes] ?? 0) + un
+      }
     }
   }
 
-  const dadosGrafico: Record<string, string | number>[] = []
+  const dadosFardo: Record<string, string | number>[] = []
+  const dadosBola:  Record<string, string | number>[] = []
   for (let i = 11; i >= 0; i--) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
     const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     const mesLabel = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(d)
-    dadosGrafico.push({ mes: mesLabel, ...(mesesMap[mesKey] ?? {}) })
+    dadosFardo.push({ mes: mesLabel, _un: unFardo[mesKey] ?? 0, ...(kgFardo[mesKey] ?? {}) })
+    dadosBola.push ({  mes: mesLabel, _un: unBola[mesKey]  ?? 0, ...(kgBola[mesKey]  ?? {}) })
   }
-
-  const todosProdutos = [...new Set(
-    (pedidosHistorico ?? []).flatMap(p => {
-      if (Array.isArray(p.itens) && p.itens.length > 0) return (p.itens as { produto: string }[]).map(i => i.produto)
-      return [p.produto]
-    }).filter(Boolean)
-  )] as string[]
 
   // Verifica se já existe planejamento salvo para o mês atual
   const { data: planejamentoDoMes } = await supabase
@@ -161,12 +187,23 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Gráfico volume por produto */}
-      <GraficoVolumesProdutos
-        dados={dadosGrafico}
-        produtos={todosProdutos}
-        produtoLabel={produtoLabel}
-      />
+      {/* Gráficos volume por tipo de produto */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <GraficoVolumesProdutos
+          titulo="Pré-Secados"
+          unidadeLabel="bolas"
+          dados={dadosBola}
+          produtos={prodIdsBola}
+          produtoLabel={produtoLabel}
+        />
+        <GraficoVolumesProdutos
+          titulo="Fardos"
+          unidadeLabel="fardos"
+          dados={dadosFardo}
+          produtos={prodIdsFardo}
+          produtoLabel={produtoLabel}
+        />
+      </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Carregamentos próximos 7 dias */}
