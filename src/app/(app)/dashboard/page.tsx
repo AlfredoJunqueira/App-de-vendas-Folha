@@ -82,8 +82,8 @@ export default async function DashboardPage() {
     if (p.unidade_embalagem) produtoUnidade[p.value] = p.unidade_embalagem
   }
 
-  const prodIdsFardo = (produtosDb ?? []).filter(p => p.unidade_embalagem === 'fardo').map(p => p.value)
-  const prodIdsBola  = (produtosDb ?? []).filter(p => p.unidade_embalagem === 'bola').map(p => p.value)
+  const prodIdsFardo = (produtosDb ?? []).filter(p => p.unidade_embalagem?.toLowerCase() === 'fardo').map(p => p.value)
+  const prodIdsBola  = (produtosDb ?? []).filter(p => p.unidade_embalagem?.toLowerCase() === 'bola').map(p => p.value)
 
   // Mapas por mês: kg por produto + total de unidades
   const kgFardo:  Record<string, Record<string, number>> = {}
