@@ -105,8 +105,9 @@ export default async function DashboardPage() {
     for (const item of itens) {
       const prod = item.produto || 'outros'
       const kg = (item.quantidade_kg ?? 0) / 1000
-      const un = item.quantidade_unidades
-        ?? (produtoPeso[prod] ? Math.round((item.quantidade_kg ?? 0) / produtoPeso[prod]) : 0)
+      const un = produtoPeso[prod]
+        ? Math.round((item.quantidade_kg ?? 0) / produtoPeso[prod])
+        : (item.quantidade_unidades ?? 0)
 
       if (prodIdsFardo.includes(prod)) {
         if (!kgFardo[mes]) kgFardo[mes] = {}
