@@ -127,13 +127,24 @@ export async function registrarPesagem(pedidoId: string, formData: FormData) {
     }
   }
 
-  // Atualiza o pedido: peso real total, itens com pesos ajustados e status entregue
+  type PedidoItemWithPreco = { quantidade_kg: number; preco_kg?: number }
+  const novoValorTotal = itensAtualizados
+    ? Math.round(
+        (itensAtualizados as PedidoItemWithPreco[]).reduce(
+          (s, it) => s + it.quantidade_kg * (it.preco_kg ?? 0),
+          0
+        ) * 100
+      ) / 100
+    : null
+
+  // Atualiza o pedido: peso real total, itens com pesos ajustados, valor total recalculado e status entregue
   await supabase
     .from('pedidos')
     .update({
       quantidade_kg: pesoTotalKg,
       status: 'entregue',
       ...(itensAtualizados ? { itens: itensAtualizados } : {}),
+      ...(novoValorTotal != null ? { valor_total: novoValorTotal } : {}),
     })
     .eq('id', pedidoId)
     .eq('owner_id', user.id)
