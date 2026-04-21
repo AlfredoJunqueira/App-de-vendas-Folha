@@ -19,6 +19,7 @@ type Pedido = {
   data_entrega_prevista: string | null
   status: string
   quantidade_kg: number
+  quantidade_unidades: number | null
   produto: string
   clientes: { nome_propriedade: string } | null
   locais_carregamento: { nome: string } | null
@@ -79,7 +80,7 @@ export default async function CarregamentosPage({
       .order('data'),
     db
       .from('pedidos')
-      .select('id, data_entrega_prevista, status, quantidade_kg, produto, clientes(nome_propriedade), locais_carregamento(nome)')
+      .select('id, data_entrega_prevista, status, quantidade_kg, quantidade_unidades, produto, clientes(nome_propriedade), locais_carregamento(nome)')
       .eq('owner_id', effectiveOwnerId)
       .neq('status', 'cancelado')
       .is('carregamento_id', null)

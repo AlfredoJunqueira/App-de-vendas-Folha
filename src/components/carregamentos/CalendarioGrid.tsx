@@ -18,6 +18,7 @@ type Pedido = {
   data_entrega_prevista: string | null
   status: string
   quantidade_kg: number
+  quantidade_unidades: number | null
   produto: string
   clientes: { nome_propriedade: string } | null
   locais_carregamento: { nome: string } | null
@@ -302,7 +303,18 @@ export default function CalendarioGrid({
                     className="block text-[10px] font-medium px-1.5 py-1 rounded leading-tight"
                   >
                     <div className="truncate font-semibold">📦 {clienteNome}</div>
-                    <div className="truncate opacity-90">{produtoCurto[p.produto] ?? p.produto} · {p.quantidade_kg} kg</div>
+                    <div className="truncate opacity-90">
+                      {produtoCurto[p.produto] ?? p.produto}
+                      {(() => {
+                        const emb = produtoEmbalagem[p.produto]
+                        if (!emb) return ` · ${p.quantidade_kg.toLocaleString('pt-BR')} kg`
+                        const qtd = p.quantidade_unidades != null
+                          ? p.quantidade_unidades
+                          : Math.round(p.quantidade_kg / emb.peso)
+                        const aprox = p.quantidade_unidades == null ? '~' : ''
+                        return ` · ${aprox}${qtd.toLocaleString('pt-BR')} ${emb.unidade}s`
+                      })()}
+                    </div>
                     {localNome && <div className="truncate opacity-80">📍 {localNome}</div>}
                   </Link>
                 )
