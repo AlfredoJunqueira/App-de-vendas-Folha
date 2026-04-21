@@ -279,6 +279,7 @@ export default async function CarregamentosPage({
         <span className="font-medium text-gray-500 uppercase tracking-wide text-[10px]">Pedidos:</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#f59e0b' }} /> Em aberto</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#3b82f6' }} /> Confirmado</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#eab308' }} /> Ag. pesagem</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#49B171' }} /> Entregue</span>
       </div>
 

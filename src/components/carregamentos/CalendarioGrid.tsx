@@ -291,6 +291,7 @@ export default function CalendarioGrid({
                 const bgColor =
                   p.status === 'em_aberto' ? '#f59e0b' :
                   p.status === 'confirmado' ? '#3b82f6' :
+                  p.status === 'aguardando_pesagem' ? '#eab308' :
                   '#49B171'
                 const clienteNome = (p.clientes as { nome_propriedade: string } | null)?.nome_propriedade
                 const localNome = (p.locais_carregamento as { nome: string } | null)?.nome
