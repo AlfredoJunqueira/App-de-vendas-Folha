@@ -125,6 +125,9 @@ export default async function EditarPedidoPage({ params }: { params: Promise<{ i
               <option value="confirmado">Confirmado</option>
               <option value="aguardando_pesagem">Aguardando pesagem</option>
               <option value="entregue">Entregue</option>
+              <option value="aguardando_nf">Ag. Nota Fiscal</option>
+              <option value="aguardando_boleto">Ag. Boleto</option>
+              <option value="finalizado">Finalizado</option>
               <option value="cancelado">Cancelado</option>
             </select>
           </div>

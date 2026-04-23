@@ -126,7 +126,7 @@ export async function executarRegistroPesagem(
     .from('pedidos')
     .update({
       quantidade_kg: pesoTotalKg,
-      status: 'entregue',
+      status: 'aguardando_nf',
       ...(itensAtualizados ? { itens: itensAtualizados } : {}),
       ...(novoValorTotal != null ? { valor_total: novoValorTotal } : {}),
     })
@@ -138,6 +138,6 @@ export async function executarRegistroPesagem(
     pedido_id: pedidoId,
     peso_kg: pesoTotalKg,
     valor_total: novoValorTotal ?? 0,
-    status: 'entregue',
+    status: 'aguardando_nf',
   }
 }

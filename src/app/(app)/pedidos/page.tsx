@@ -58,8 +58,11 @@ export default async function PedidosPage({
   const statusLabel: Record<string, string> = {
     em_aberto: 'Em aberto',
     confirmado: 'Confirmado',
-    aguardando_pesagem: 'Aguardando pesagem',
+    aguardando_pesagem: 'Ag. pesagem',
     entregue: 'Entregue',
+    aguardando_nf: 'Ag. NF',
+    aguardando_boleto: 'Ag. Boleto',
+    finalizado: 'Finalizado',
     cancelado: 'Cancelado',
   }
 
@@ -68,6 +71,9 @@ export default async function PedidosPage({
     confirmado: 'bg-blue-100 text-blue-700',
     aguardando_pesagem: 'bg-orange-100 text-orange-700',
     entregue: 'bg-green-100 text-green-700',
+    aguardando_nf: 'bg-violet-100 text-violet-700',
+    aguardando_boleto: 'bg-purple-100 text-purple-700',
+    finalizado: 'bg-teal-100 text-teal-700',
     cancelado: 'bg-gray-100 text-gray-500',
   }
 
@@ -122,7 +128,7 @@ export default async function PedidosPage({
 
           {/* Filtro por status */}
           <div className="flex gap-2 flex-wrap">
-            {['', 'em_aberto', 'confirmado', 'aguardando_pesagem', 'entregue', 'cancelado'].map(s => (
+            {['', 'em_aberto', 'confirmado', 'aguardando_pesagem', 'entregue', 'aguardando_nf', 'aguardando_boleto', 'finalizado', 'cancelado'].map(s => (
               <Link
                 key={s}
                 href={`/pedidos?mes=${mesAtual}${s ? `&status=${s}` : ''}`}

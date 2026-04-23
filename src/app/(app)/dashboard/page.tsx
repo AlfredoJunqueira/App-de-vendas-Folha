@@ -151,6 +151,15 @@ export default async function DashboardPage() {
     })
   }
 
+  // Pedidos com pendências pós-entrega
+  const { data: posEntregaPendente } = await supabase
+    .from('pedidos')
+    .select('id, numero, status, clientes(nome_propriedade)')
+    .eq('owner_id', user!.id)
+    .in('status', ['entregue', 'aguardando_nf', 'aguardando_boleto'])
+    .order('criado_em', { ascending: false })
+    .limit(10)
+
   // Verifica se já existe planejamento salvo para o mês atual
   const { data: planejamentoDoMes } = await supabase
     .from('planejamentos_mensais')
@@ -160,18 +169,30 @@ export default async function DashboardPage() {
     .limit(1)
   const temPlanejamentoSalvo = (planejamentoDoMes?.length ?? 0) > 0
 
-  const statusLabel: Record<string, string> = {
+  const statusCarLabel: Record<string, string> = {
     rascunho: 'Rascunho',
     confirmado: 'Confirmado',
     em_rota: 'Em rota',
     entregue: 'Entregue',
   }
 
-  const statusColor: Record<string, string> = {
+  const statusCarColor: Record<string, string> = {
     rascunho: 'bg-gray-100 text-gray-600',
     confirmado: 'bg-blue-100 text-blue-700',
     em_rota: 'bg-yellow-100 text-yellow-700',
     entregue: 'bg-green-100 text-green-700',
+  }
+
+  const statusPedidoLabel: Record<string, string> = {
+    entregue: 'Entregue',
+    aguardando_nf: 'Ag. Nota Fiscal',
+    aguardando_boleto: 'Ag. Boleto',
+  }
+
+  const statusPedidoColor: Record<string, string> = {
+    entregue: 'bg-green-100 text-green-700',
+    aguardando_nf: 'bg-violet-100 text-violet-700',
+    aguardando_boleto: 'bg-purple-100 text-purple-700',
   }
 
   return (
@@ -230,6 +251,45 @@ export default async function DashboardPage() {
         />
       </div>
 
+      {/* Pós-entrega pendente */}
+      {(posEntregaPendente?.length ?? 0) > 0 && (
+        <div className="bg-white rounded-xl border border-violet-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-medium text-gray-900">
+              Pós-entrega pendente
+              <span className="ml-2 text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">
+                {posEntregaPendente!.length}
+              </span>
+            </h2>
+            <Link href="/pedidos?status=aguardando_nf" className="text-xs text-violet-600 hover:underline">Ver todos</Link>
+          </div>
+          <div className="space-y-2">
+            {posEntregaPendente!.map(p => {
+              const nomeCliente = (p.clientes as unknown as { nome_propriedade: string } | null)?.nome_propriedade
+              const proxima =
+                p.status === 'entregue' || p.status === 'aguardando_nf'
+                  ? 'Emitir Nota Fiscal'
+                  : 'Enviar boletos e docs'
+              return (
+                <Link
+                  key={p.id}
+                  href={`/pedidos/${p.id}`}
+                  className="flex items-center justify-between p-3 rounded-lg bg-violet-50 hover:bg-violet-100 transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{nomeCliente}</p>
+                    <p className="text-xs text-violet-700 mt-0.5">{proxima}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusPedidoColor[p.status]}`}>
+                    {statusPedidoLabel[p.status]}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-6">
         {/* Carregamentos próximos 7 dias */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -249,8 +309,8 @@ export default async function DashboardPage() {
                     <p className="text-sm font-medium text-gray-900">{formatDate(c.data)}</p>
                     <p className="text-xs text-gray-500">{c.transportador_nome || 'Sem transportador'}</p>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[c.status]}`}>
-                    {statusLabel[c.status]}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCarColor[c.status]}`}>
+                    {statusCarLabel[c.status]}
                   </span>
                 </Link>
               ))}

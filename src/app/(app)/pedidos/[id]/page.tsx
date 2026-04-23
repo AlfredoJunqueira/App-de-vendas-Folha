@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatBRL, formatDate } from '@/lib/utils/format'
 import DeletePedidoButton from '@/components/pedidos/DeletePedidoButton'
 import { criarCarregamentoDoPedido } from '@/lib/actions/carregamentos'
+import { avancarStatusPosEntrega } from '@/lib/actions/pedidos'
 export default async function DetalhePedidoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
@@ -71,6 +72,9 @@ export default async function DetalhePedidoPage({ params }: { params: Promise<{ 
     confirmado: 'Confirmado',
     aguardando_pesagem: 'Aguardando pesagem',
     entregue: 'Entregue',
+    aguardando_nf: 'Ag. Nota Fiscal',
+    aguardando_boleto: 'Ag. Boleto',
+    finalizado: 'Finalizado',
     cancelado: 'Cancelado',
   }
 
@@ -79,8 +83,13 @@ export default async function DetalhePedidoPage({ params }: { params: Promise<{ 
     confirmado: 'bg-blue-100 text-blue-700',
     aguardando_pesagem: 'bg-orange-100 text-orange-700',
     entregue: 'bg-green-100 text-green-700',
+    aguardando_nf: 'bg-violet-100 text-violet-700',
+    aguardando_boleto: 'bg-purple-100 text-purple-700',
+    finalizado: 'bg-teal-100 text-teal-700',
     cancelado: 'bg-gray-100 text-gray-500',
   }
+
+  const STATUS_POS_ENTREGA_PENDENTE = ['entregue', 'aguardando_nf', 'aguardando_boleto']
 
   const cliente = p.clientes as { id: string; nome_propriedade: string; contato: string | null; telefone: string | null } | null
   const local = p.locais_carregamento as { id: string; nome: string; cidade: string | null; estado: string | null } | null
@@ -316,6 +325,43 @@ export default async function DetalhePedidoPage({ params }: { params: Promise<{ 
             }`}>
               {statusCarLabel[carregamento.status]}
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Pós-entrega */}
+      {STATUS_POS_ENTREGA_PENDENTE.includes(p.status) && (
+        <div className="bg-white rounded-xl border border-violet-200 p-5 mb-4">
+          <h2 className="font-medium text-gray-900 mb-3">Pós-entrega</h2>
+          <div className="space-y-2">
+            <div className={`flex items-center justify-between p-3 rounded-lg ${
+              ['aguardando_boleto'].includes(p.status) ? 'bg-green-50' : 'bg-violet-50'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="text-base">{['aguardando_boleto'].includes(p.status) ? '✅' : '⏳'}</span>
+                <span className="text-sm font-medium text-gray-900">Nota Fiscal emitida</span>
+              </div>
+              {!['aguardando_boleto'].includes(p.status) && (
+                <form action={avancarStatusPosEntrega.bind(null, id)}>
+                  <button type="submit" className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors">
+                    Marcar como feito
+                  </button>
+                </form>
+              )}
+            </div>
+            <div className={`flex items-center justify-between p-3 rounded-lg bg-gray-50`}>
+              <div className="flex items-center gap-2">
+                <span className="text-base">⏳</span>
+                <span className="text-sm font-medium text-gray-900">Boletos e docs enviados ao cliente</span>
+              </div>
+              {p.status === 'aguardando_boleto' && (
+                <form action={avancarStatusPosEntrega.bind(null, id)}>
+                  <button type="submit" className="text-xs px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+                    Marcar como feito
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}

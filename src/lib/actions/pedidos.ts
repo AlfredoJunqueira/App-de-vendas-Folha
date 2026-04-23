@@ -110,6 +110,42 @@ export async function atualizarPedido(id: string, formData: FormData) {
   redirect(`/pedidos/${id}`)
 }
 
+export async function avancarStatusPosEntrega(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: pedido } = await supabase
+    .from('pedidos')
+    .select('status')
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .single()
+
+  if (!pedido) throw new Error('Pedido não encontrado')
+
+  const proximoStatus: Record<string, string> = {
+    entregue: 'aguardando_boleto',
+    aguardando_nf: 'aguardando_boleto',
+    aguardando_boleto: 'finalizado',
+  }
+
+  const proximo = proximoStatus[pedido.status]
+  if (!proximo) throw new Error('Status não pode ser avançado')
+
+  const { error } = await supabase
+    .from('pedidos')
+    .update({ status: proximo })
+    .eq('id', id)
+    .eq('owner_id', user.id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/pedidos/${id}`)
+  revalidatePath('/pedidos')
+  revalidatePath('/dashboard')
+}
+
 export async function excluirPedido(id: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -292,6 +292,9 @@ export default function CalendarioGrid({
                   p.status === 'em_aberto' ? '#f59e0b' :
                   p.status === 'confirmado' ? '#3b82f6' :
                   p.status === 'aguardando_pesagem' ? '#3b82f6' :
+                  p.status === 'aguardando_nf' ? '#7c3aed' :
+                  p.status === 'aguardando_boleto' ? '#9333ea' :
+                  p.status === 'finalizado' ? '#0d9488' :
                   '#49B171'
                 const clienteNome = (p.clientes as { nome_propriedade: string } | null)?.nome_propriedade
                 const localNome = (p.locais_carregamento as { nome: string } | null)?.nome

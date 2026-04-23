@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
   }
 
-  if (pedido.status === 'entregue') {
+  const STATUS_POS_ENTREGA = ['entregue', 'aguardando_nf', 'aguardando_boleto', 'finalizado']
+  if (STATUS_POS_ENTREGA.includes(pedido.status)) {
     return NextResponse.json({ error: 'Pedido já foi entregue' }, { status: 409 })
   }
 
