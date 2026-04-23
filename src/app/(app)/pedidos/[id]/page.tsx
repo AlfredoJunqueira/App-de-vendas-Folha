@@ -78,15 +78,15 @@ export default async function DetalhePedidoPage({ params }: { params: Promise<{ 
     cancelado: 'Cancelado',
   }
 
-  const statusColor: Record<string, string> = {
-    em_aberto: 'bg-yellow-100 text-yellow-700',
-    confirmado: 'bg-blue-100 text-blue-700',
-    aguardando_pesagem: 'bg-orange-100 text-orange-700',
-    entregue: 'bg-green-100 text-green-700',
-    aguardando_nf: 'bg-violet-100 text-violet-700',
-    aguardando_boleto: 'bg-purple-100 text-purple-700',
-    finalizado: 'bg-teal-100 text-teal-700',
-    cancelado: 'bg-gray-100 text-gray-500',
+  const statusBgColor: Record<string, string> = {
+    em_aberto: '#f59e0b',
+    confirmado: '#3b82f6',
+    aguardando_pesagem: '#3b82f6',
+    entregue: '#49B171',
+    aguardando_nf: '#7c3aed',
+    aguardando_boleto: '#9333ea',
+    finalizado: '#0d9488',
+    cancelado: '#9ca3af',
   }
 
   const STATUS_POS_ENTREGA_PENDENTE = ['entregue', 'aguardando_nf', 'aguardando_boleto']
@@ -157,7 +157,10 @@ export default async function DetalhePedidoPage({ params }: { params: Promise<{ 
             </p>
           )}
           <h1 className="text-xl font-semibold text-gray-900">{cliente?.nome_propriedade}</h1>
-          <span className={`inline-block mt-1 text-xs px-2.5 py-1 rounded-full font-medium ${statusColor[p.status]}`}>
+          <span
+            style={{ backgroundColor: statusBgColor[p.status] ?? '#9ca3af' }}
+            className="inline-block mt-1 text-xs px-2.5 py-1 rounded-full font-medium text-white"
+          >
             {statusLabel[p.status]}
           </span>
         </div>
