@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { moverCarregamento } from '@/lib/actions/carregamentos'
+import { moverCarregamento, criarCarregamentoDoPedido } from '@/lib/actions/carregamentos'
 
 type Carregamento = {
   id: string
@@ -286,7 +286,7 @@ export default function CalendarioGrid({
                 )
               })}
 
-              {/* Pedidos com entrega prevista — não arrastáveis */}
+              {/* Pedidos com entrega prevista — clique cria carregamento direto */}
               {dayData.pedidos.map(p => {
                 const bgColor =
                   p.status === 'em_aberto' ? '#f59e0b' :
@@ -300,27 +300,28 @@ export default function CalendarioGrid({
                 const localNome = (p.locais_carregamento as { nome: string } | null)?.nome
 
                 return (
-                  <Link
-                    key={p.id}
-                    href={`/pedidos/${p.id}`}
-                    style={{ backgroundColor: bgColor, color: '#fff' }}
-                    className="block text-[10px] font-medium px-1.5 py-1 rounded leading-tight"
-                  >
-                    <div className="truncate font-semibold">📦 {clienteNome}</div>
-                    <div className="truncate opacity-90">
-                      {produtoCurto[p.produto] ?? p.produto}
-                      {(() => {
-                        const emb = produtoEmbalagem[p.produto]
-                        if (!emb) return ` · ${p.quantidade_kg.toLocaleString('pt-BR')} kg`
-                        const qtd = p.quantidade_unidades != null
-                          ? p.quantidade_unidades
-                          : Math.round(p.quantidade_kg / emb.peso)
-                        const aprox = p.quantidade_unidades == null ? '~' : ''
-                        return ` · ${aprox}${qtd.toLocaleString('pt-BR')} ${emb.unidade}s`
-                      })()}
-                    </div>
-                    {localNome && <div className="truncate opacity-80">📍 {localNome}</div>}
-                  </Link>
+                  <form key={p.id} action={criarCarregamentoDoPedido.bind(null, p.id)}>
+                    <button
+                      type="submit"
+                      style={{ backgroundColor: bgColor, color: '#fff' }}
+                      className="w-full text-left text-[10px] font-medium px-1.5 py-1 rounded leading-tight cursor-pointer hover:opacity-90 transition-opacity"
+                    >
+                      <div className="truncate font-semibold">📦 {clienteNome}</div>
+                      <div className="truncate opacity-90">
+                        {produtoCurto[p.produto] ?? p.produto}
+                        {(() => {
+                          const emb = produtoEmbalagem[p.produto]
+                          if (!emb) return ` · ${p.quantidade_kg.toLocaleString('pt-BR')} kg`
+                          const qtd = p.quantidade_unidades != null
+                            ? p.quantidade_unidades
+                            : Math.round(p.quantidade_kg / emb.peso)
+                          const aprox = p.quantidade_unidades == null ? '~' : ''
+                          return ` · ${aprox}${qtd.toLocaleString('pt-BR')} ${emb.unidade}s`
+                        })()}
+                      </div>
+                      {localNome && <div className="truncate opacity-80">📍 {localNome}</div>}
+                    </button>
+                  </form>
                 )
               })}
             </div>
