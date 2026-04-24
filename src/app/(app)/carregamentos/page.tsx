@@ -11,7 +11,7 @@ type Carregamento = {
   status: string
   transportador_nome: string | null
   locais_carregamento: { nome: string } | null
-  paradas: { quantidade_kg: number; quantidade_unidades: number | null; produto: string; clientes: { nome_propriedade: string } | null }[]
+  paradas: { quantidade_kg: number; quantidade_unidades: number | null; produto: string; clientes: { nome_propriedade: string } | null; pedidos: { status: string } | null }[]
 }
 
 type Pedido = {
@@ -73,7 +73,7 @@ export default async function CarregamentosPage({
   const [{ data: carregamentos }, { data: pedidos }, { data: produtos }, locaisResult] = await Promise.all([
     db
       .from('carregamentos')
-      .select('id, data, status, transportador_nome, locais_carregamento(nome), paradas(quantidade_kg, quantidade_unidades, produto, clientes(nome_propriedade))')
+      .select('id, data, status, transportador_nome, locais_carregamento(nome), paradas(quantidade_kg, quantidade_unidades, produto, clientes(nome_propriedade), pedidos(status))')
       .eq('owner_id', effectiveOwnerId)
       .gte('data', inicioMes)
       .lte('data', fimMes)

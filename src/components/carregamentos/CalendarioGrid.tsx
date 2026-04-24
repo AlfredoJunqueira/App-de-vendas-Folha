@@ -10,7 +10,7 @@ type Carregamento = {
   status: string
   transportador_nome: string | null
   locais_carregamento: { nome: string } | null
-  paradas: { quantidade_kg: number; quantidade_unidades: number | null; produto: string; clientes: { nome_propriedade: string } | null }[]
+  paradas: { quantidade_kg: number; quantidade_unidades: number | null; produto: string; clientes: { nome_propriedade: string } | null; pedidos: { status: string } | null }[]
 }
 
 type Pedido = {
@@ -215,10 +215,17 @@ export default function CalendarioGrid({
               {dayData.carregamentos.map(c => {
                 const paradas = c.paradas ?? []
                 const kg = paradas.reduce((s, p) => s + (p.quantidade_kg || 0), 0)
+                const statusPedidos = c.paradas.map(p => p.pedidos?.status).filter(Boolean) as string[]
+                const temNfPendente = statusPedidos.some(s => s === 'aguardando_nf' || s === 'entregue')
+                const temBoletoPendente = !temNfPendente && statusPedidos.some(s => s === 'aguardando_boleto')
+                const todosFinalizado = statusPedidos.length > 0 && statusPedidos.every(s => s === 'finalizado')
                 const bgColor =
                   c.status === 'rascunho' ? '#9ca3af' :
                   c.status === 'confirmado' ? '#015046' :
                   c.status === 'em_rota' ? '#D2D82B' :
+                  temNfPendente ? '#7c3aed' :
+                  temBoletoPendente ? '#9333ea' :
+                  todosFinalizado ? '#0d9488' :
                   '#49B171'
                 const corFonte = corFontePorNome[c.locais_carregamento?.nome ?? '']
                 const textColor = c.status === 'em_rota' ? '#193337' : corFonte || '#fff'
