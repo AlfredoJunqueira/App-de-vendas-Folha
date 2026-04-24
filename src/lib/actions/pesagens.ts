@@ -13,6 +13,10 @@ export async function registrarPesagem(pedidoId: string, formData: FormData) {
   const pesoTotalKg = parseFloat(formData.get('peso_total_kg') as string)
   if (!pesoTotalKg || pesoTotalKg <= 0) throw new Error('Peso inválido')
 
+  const qtdRaw = formData.get('quantidade_unidades_real') as string
+  const quantidadeUnidades = qtdRaw ? Math.round(parseFloat(qtdRaw)) : null
+  if (quantidadeUnidades !== null && quantidadeUnidades <= 0) throw new Error('Quantidade inválida')
+
   // Valida que o pedido pertence ao usuário
   const { data: pedido, error: pedidoErr } = await supabase
     .from('pedidos')
@@ -23,7 +27,7 @@ export async function registrarPesagem(pedidoId: string, formData: FormData) {
 
   if (pedidoErr || !pedido) throw new Error('Pedido não encontrado')
 
-  await executarRegistroPesagem(supabase, pedidoId, pesoTotalKg, user.id)
+  await executarRegistroPesagem(supabase, pedidoId, pesoTotalKg, user.id, quantidadeUnidades)
 
   revalidatePath('/pesagens')
   revalidatePath('/pedidos')

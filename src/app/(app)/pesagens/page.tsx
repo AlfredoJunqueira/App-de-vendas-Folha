@@ -6,23 +6,35 @@ export default async function PesagensPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Busca pedidos aguardando pesagem com seus carregamentos e clientes
-  const { data: pedidos } = await supabase
-    .from('pedidos')
-    .select(`
-      id,
-      quantidade_kg,
-      quantidade_unidades,
-      produto,
-      itens,
-      data_entrega_prevista,
-      carregamento_id,
-      clientes(nome_propriedade),
-      carregamentos(id, data, transportador_nome, transportador_placa, paradas(id, quantidade_unidades, quantidade_kg, produto))
-    `)
-    .eq('owner_id', user!.id)
-    .eq('status', 'aguardando_pesagem')
-    .order('data_entrega_prevista', { ascending: true })
+  const [{ data: pedidos }, { data: produtosDb }] = await Promise.all([
+    supabase
+      .from('pedidos')
+      .select(`
+        id,
+        quantidade_kg,
+        quantidade_unidades,
+        produto,
+        itens,
+        data_entrega_prevista,
+        carregamento_id,
+        clientes(nome_propriedade),
+        carregamentos(id, data, transportador_nome, transportador_placa, paradas(id, quantidade_unidades, quantidade_kg, produto))
+      `)
+      .eq('owner_id', user!.id)
+      .eq('status', 'aguardando_pesagem')
+      .order('data_entrega_prevista', { ascending: true }),
+    supabase
+      .from('produtos')
+      .select('value, unidade_embalagem')
+      .eq('owner_id', user!.id),
+  ])
+
+  // Mapa produto value → unidade (bola, fardo, etc.)
+  const produtoUnidade: Record<string, string> = Object.fromEntries(
+    (produtosDb ?? [])
+      .filter(p => p.unidade_embalagem)
+      .map(p => [p.value, p.unidade_embalagem as string])
+  )
 
   return (
     <div className="max-w-2xl">
@@ -54,6 +66,8 @@ export default async function PesagensPage() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               ? (carr.paradas as any[]).reduce((s: number, p: any) => s + (p.quantidade_unidades ?? 0), 0)
               : (pedido.quantidade_unidades ?? 0)
+
+            const unidade = produtoUnidade[pedido.produto]
 
             const action = registrarPesagem.bind(null, pedido.id)
 
@@ -117,27 +131,44 @@ export default async function PesagensPage() {
                 )}
 
                 {/* Formulário de pesagem */}
-                <form action={action} className="flex gap-3 items-end pt-3 border-t border-gray-100">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Peso real da carga (kg)
-                    </label>
-                    <input
-                      type="number"
-                      name="peso_total_kg"
-                      required
-                      min="1"
-                      step="0.01"
-                      placeholder="Ex: 24500"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
+                <form action={action} className="pt-3 border-t border-gray-100 space-y-3">
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Peso real da carga (kg)
+                      </label>
+                      <input
+                        type="number"
+                        name="peso_total_kg"
+                        required
+                        min="1"
+                        step="0.01"
+                        placeholder="Ex: 24500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+                    {unidade && (
+                      <div className="w-36">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Qtd. real ({unidade}s)
+                        </label>
+                        <input
+                          type="number"
+                          name="quantidade_unidades_real"
+                          min="1"
+                          step="1"
+                          placeholder={totalUnidades > 0 ? String(totalUnidades) : 'Opcional'}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      Registrar pesagem
+                    </button>
                   </div>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-                  >
-                    Registrar pesagem
-                  </button>
                 </form>
               </div>
             )

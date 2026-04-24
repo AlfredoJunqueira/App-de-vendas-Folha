@@ -10,20 +10,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
-  let body: { pedido_id?: string; peso_kg?: number; ticket?: unknown }
+  let body: { pedido_id?: string; peso_kg?: number; quantidade_unidades?: number; ticket?: unknown }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
   }
 
-  const { pedido_id, peso_kg } = body
+  const { pedido_id, peso_kg, quantidade_unidades } = body
 
   if (!pedido_id || typeof pedido_id !== 'string') {
     return NextResponse.json({ error: 'pedido_id obrigatório' }, { status: 422 })
   }
   if (!peso_kg || typeof peso_kg !== 'number' || peso_kg <= 0) {
     return NextResponse.json({ error: 'peso_kg deve ser um número positivo' }, { status: 422 })
+  }
+  if (quantidade_unidades !== undefined && (typeof quantidade_unidades !== 'number' || quantidade_unidades <= 0)) {
+    return NextResponse.json({ error: 'quantidade_unidades deve ser um número positivo' }, { status: 422 })
   }
 
   const supabase = createClient(
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await executarRegistroPesagem(supabase, pedido_id, peso_kg, pedido.owner_id)
+    const result = await executarRegistroPesagem(supabase, pedido_id, peso_kg, pedido.owner_id, quantidade_unidades ?? null)
 
     revalidatePath('/pesagens')
     revalidatePath('/pedidos')

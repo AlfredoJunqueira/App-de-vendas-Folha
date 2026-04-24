@@ -6,6 +6,7 @@ type PedidoItemWithPreco = { produto: string; quantidade_kg: number; preco_kg?: 
 export interface PesagemResult {
   pedido_id: string
   peso_kg: number
+  quantidade_unidades: number | null
   valor_total: number
   status: string
 }
@@ -14,7 +15,8 @@ export async function executarRegistroPesagem(
   supabase: SupabaseClient,
   pedidoId: string,
   pesoTotalKg: number,
-  ownerId: string
+  ownerId: string,
+  quantidadeUnidades?: number | null
 ): Promise<PesagemResult> {
   const { data: pedido, error: pedidoErr } = await supabase
     .from('pedidos')
@@ -35,6 +37,7 @@ export async function executarRegistroPesagem(
 
   let itensAtualizados = itensAtuais
   if (itensAtuais && itensAtuais.length > 0) {
+    // Redistribui kg proporcionalmente
     const totalEstimado = itensAtuais.reduce((s: number, it: ParadaItemDB) => s + (it.quantidade_kg ?? 0), 0)
     if (totalEstimado > 0) {
       itensAtualizados = itensAtuais.map((item: ParadaItemDB) => ({
@@ -44,6 +47,19 @@ export async function executarRegistroPesagem(
     } else {
       const kgPorItem = Math.round((pesoTotalKg / itensAtuais.length) * 100) / 100
       itensAtualizados = itensAtuais.map((item: ParadaItemDB) => ({ ...item, quantidade_kg: kgPorItem }))
+    }
+
+    // Redistribui unidades proporcionalmente se informadas
+    if (quantidadeUnidades && quantidadeUnidades > 0) {
+      const totalUnidadesEstimadas = itensAtuais.reduce((s: number, it: ParadaItemDB) => s + (it.quantidade_unidades ?? 0), 0)
+      if (totalUnidadesEstimadas > 0) {
+        itensAtualizados = itensAtualizados!.map((item: ParadaItemDB) => ({
+          ...item,
+          quantidade_unidades: Math.round(((item.quantidade_unidades ?? 0) / totalUnidadesEstimadas) * quantidadeUnidades),
+        }))
+      } else if (itensAtualizados!.length === 1) {
+        itensAtualizados = [{ ...itensAtualizados![0], quantidade_unidades: quantidadeUnidades }]
+      }
     }
   }
 
@@ -56,20 +72,29 @@ export async function executarRegistroPesagem(
       .eq('carregamento_id', pedido.carregamento_id)
 
     if (paradas && paradas.length > 0) {
-      const totalUnidades = paradas.reduce((s, p) => s + (p.quantidade_unidades ?? 0), 0)
-      const pesoPorUnidade = totalUnidades > 0 ? pesoTotalKg / totalUnidades : null
+      const totalUnidadesEstimadas = paradas.reduce((s, p) => s + (p.quantidade_unidades ?? 0), 0)
+
+      // peso_por_unidade usa os valores reais se disponíveis, senão os estimados
+      const totalUnidadesParaPPU = quantidadeUnidades ?? totalUnidadesEstimadas
+      const pesoPorUnidade = totalUnidadesParaPPU > 0 ? pesoTotalKg / totalUnidadesParaPPU : null
 
       for (const parada of paradas) {
         let paradaKg: number
-        if (totalUnidades > 0 && parada.quantidade_unidades) {
-          paradaKg = Math.round((parada.quantidade_unidades / totalUnidades) * pesoTotalKg * 100) / 100
+        if (totalUnidadesEstimadas > 0 && parada.quantidade_unidades) {
+          paradaKg = Math.round((parada.quantidade_unidades / totalUnidadesEstimadas) * pesoTotalKg * 100) / 100
         } else if (paradas.length === 1) {
           paradaKg = pesoTotalKg
         } else {
           paradaKg = Math.round((pesoTotalKg / paradas.length) * 100) / 100
         }
 
-        const novoPesoPorUnidade = pesoPorUnidade != null && parada.quantidade_unidades ? pesoPorUnidade : null
+        // Redistribui unidades reais para a parada proporcionalmente
+        let paradaUnidades = parada.quantidade_unidades
+        if (quantidadeUnidades && quantidadeUnidades > 0 && totalUnidadesEstimadas > 0 && parada.quantidade_unidades) {
+          paradaUnidades = Math.round((parada.quantidade_unidades / totalUnidadesEstimadas) * quantidadeUnidades)
+        }
+
+        const novoPesoPorUnidade = pesoPorUnidade != null && paradaUnidades ? pesoPorUnidade : null
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const itensParada = Array.isArray((parada as any).itens) ? (parada as any).itens as ParadaItemDB[] : null
@@ -85,6 +110,7 @@ export async function executarRegistroPesagem(
           .from('paradas')
           .update({
             quantidade_kg: paradaKg,
+            ...(paradaUnidades !== parada.quantidade_unidades ? { quantidade_unidades: paradaUnidades } : {}),
             ...(itensParadaAtualizados ? { itens: itensParadaAtualizados } : {}),
             ...(novoPesoPorUnidade != null ? { peso_por_unidade: novoPesoPorUnidade } : {}),
           })
@@ -122,11 +148,14 @@ export async function executarRegistroPesagem(
       ) / 100
     : null
 
+  const novaQtdUnidades = quantidadeUnidades ?? (pedido.quantidade_unidades as number | null)
+
   const { error: updateErr } = await supabase
     .from('pedidos')
     .update({
       quantidade_kg: pesoTotalKg,
       status: 'aguardando_nf',
+      ...(novaQtdUnidades != null ? { quantidade_unidades: novaQtdUnidades } : {}),
       ...(itensAtualizados ? { itens: itensAtualizados } : {}),
       ...(novoValorTotal != null ? { valor_total: novoValorTotal } : {}),
     })
@@ -137,6 +166,7 @@ export async function executarRegistroPesagem(
   return {
     pedido_id: pedidoId,
     peso_kg: pesoTotalKg,
+    quantidade_unidades: novaQtdUnidades,
     valor_total: novoValorTotal ?? 0,
     status: 'aguardando_nf',
   }
