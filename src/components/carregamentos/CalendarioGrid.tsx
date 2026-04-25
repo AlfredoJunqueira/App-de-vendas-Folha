@@ -221,7 +221,7 @@ export default function CalendarioGrid({
                 const todosFinalizado = statusPedidos.length > 0 && statusPedidos.every(s => s === 'finalizado')
                 const bgColor =
                   c.status === 'rascunho' ? '#9ca3af' :
-                  c.status === 'confirmado' ? '#015046' :
+                  c.status === 'confirmado' ? '#3b82f6' :
                   c.status === 'em_rota' ? '#D2D82B' :
                   temNfPendente ? '#7c3aed' :
                   temBoletoPendente ? '#9333ea' :

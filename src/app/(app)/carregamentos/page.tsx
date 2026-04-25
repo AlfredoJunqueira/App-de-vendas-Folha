@@ -272,7 +272,7 @@ export default async function CarregamentosPage({
       <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600">
         <span className="font-medium text-gray-500 uppercase tracking-wide text-[10px]">Carregamentos:</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#9ca3af' }} /> Rascunho</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#015046' }} /> Confirmado</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#3b82f6' }} /> Confirmado</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#D2D82B' }} /> Em rota</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#49B171' }} /> Entregue</span>
         <span className="mx-1 text-gray-300">|</span>
